@@ -1,0 +1,23 @@
+import { type Document, type Types } from "mongoose";
+export interface IMessage extends Document {
+    chatId: Types.ObjectId;
+    sender: Types.ObjectId;
+    text?: string;
+    image?: {
+        url: string;
+        publicId: string;
+    };
+    messageType: "text" | "image";
+    seen: boolean;
+    seenAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+export declare const Message: import("mongoose").Model<IMessage, {}, {}, {}, Document<unknown, {}, IMessage, {}, import("mongoose").DefaultSchemaOptions> & IMessage & Required<{
+    _id: Types.ObjectId;
+}> & {
+    __v: number;
+} & {
+    id: string;
+}, any, IMessage>;
+//# sourceMappingURL=Message.d.ts.map
