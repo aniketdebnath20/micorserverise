@@ -30,13 +30,11 @@ const SignUp = () => {
     try {
       setIsLoading(true);
 
-      // simulate API call for sending OTP
-
-      const { data } = await axios.post(`http://localhost:5000/api/v1/login`, {
+      await axios.post(`${process.env.NEXT_PUBLIC_USER_SERVICES_ROUTE}/api/v1/login`, {
         email,
       });
 
-      alert(data.message);
+      toast.success("OTP sent");
       router.push(`/verify-otp?email=${email}`);
 
       toast.success("OTP sent!", {
@@ -44,6 +42,7 @@ const SignUp = () => {
       });
     } catch (error) {
       toast.error("SignUp failed");
+      console.log(error);
     } finally {
       setIsLoading(false);
     }

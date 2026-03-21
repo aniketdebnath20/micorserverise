@@ -8,32 +8,41 @@ import {
   ArrowRight,
   ArrowLeft,
   ShieldCheck,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import axios from "axios";
 import Cookies from "js-cookie";
+import { useAppContextData } from "@/context/appcontext";
+
+const OTP_LENGTH = 6;
 
 export default function VerifyOtp() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const email = searchParams.get("email");
 
-  const [otp, setOtp] = useState<string[]>(["", "", "", "", "", ""]);
+  const { isAuth, setIsAuth, setUser, fetchChats } = useAppContextData();
+
+  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
   const [isLoading, setIsLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [timer, setTimer] = useState(60);
 
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  /* redirect if no email */
+  /* redirect if email missing */
   useEffect(() => {
-    if (!email) {
-      router.push("/signup");
-    }
+    if (!email) router.replace("/signup");
   }, [email, router]);
 
-  /* resend timer */
+  /* focus first input */
+  useEffect(() => {
+    inputRefs.current[0]?.focus();
+  }, []);
+
+  /* resend countdown */
   useEffect(() => {
     if (timer === 0) return;
 
@@ -44,31 +53,34 @@ export default function VerifyOtp() {
     return () => clearInterval(interval);
   }, [timer]);
 
+  /* handle OTP input */
   const handleChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
+    if (!/^\d?$/.test(value)) return;
 
     const newOtp = [...otp];
-    newOtp[index] = value.slice(-1);
+    newOtp[index] = value;
     setOtp(newOtp);
 
-    if (value && index < 5) {
+    if (value && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
+  /* keyboard navigation */
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === "Backspace" && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
+  /* paste OTP */
   const handlePaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
 
     const pasted = e.clipboardData
       .getData("text")
       .replace(/\D/g, "")
-      .slice(0, 6);
+      .slice(0, OTP_LENGTH);
 
     const newOtp = [...otp];
 
@@ -78,67 +90,95 @@ export default function VerifyOtp() {
 
     setOtp(newOtp);
 
-    const focusIndex = Math.min(pasted.length, 5);
+    const focusIndex = Math.min(pasted.length, OTP_LENGTH - 1);
     inputRefs.current[focusIndex]?.focus();
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const code = otp.join("");
-
-    if (code.length < 6) {
-      toast.error("Incomplete code", {
-        description: "Please enter the full 6-digit code.",
-      });
-      return;
-    }
-
+  /* verify OTP */
+  const verifyOtp = async (code: string) => {
     try {
       setIsLoading(true);
 
-      /* call your verify OTP API here */
-      // simulate API call for sending OTP
+      const { data } = await axios.post(
+        `${process.env.NEXT_PUBLIC_USER_SERVICES_ROUTE}/api/v1/verify`,
+        {
+          email,
+          otp: code,
+        },
+      );
 
-      const { data } = await axios.post(`http://localhost:5000/api/v1/verify`, {
-        otp,
-      });
+      console.log(
+        "email tnad code code her cejc h is the aeawierj",
+        email,
+        code,
+      );
 
-      alert(data.message);
+      setUser(data.user);
+      setIsAuth(true);
+
       Cookies.set("token", data.token, {
-        expries: 15,
-        secure: false,
+        expires: 15,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
         path: "/",
-      }); // or diffren way to set token and differn package of cookie
-      // after that balck the otp filed and inputRef field
-      // otp feild attyu balck emapyt
-
-      toast.success("Account created!", {
-        description: "Welcome to ChatterBox.",
       });
+
+      toast.success("Account verified", {
+        description: "Welcome to ChatterBox",
+      });
+      fetchChats();
 
       router.push("/chat");
-    } catch (error) {
-      toast.error("OTP verification failed");
-      console.log(error);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        toast.error(error.response?.data?.message || "OTP verification failed");
+      } else {
+        toast.error("Something went wrong");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
+  /* submit handler */
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+
+    const code = otp.join("");
+
+    if (code.length !== OTP_LENGTH) {
+      toast.error("Incomplete code", {
+        description: "Please enter the full 6-digit code",
+      });
+      return;
+    }
+
+    await verifyOtp(code);
+  };
+
+  /* auto submit */
+  useEffect(() => {
+    const code = otp.join("");
+
+    if (code.length === OTP_LENGTH && !otp.includes("")) {
+      verifyOtp(code);
+    }
+  }, [otp]);
+
+  /* resend OTP */
   const handleResend = async () => {
-    if (timer > 0) return;
+    if (timer > 0 || !email) return;
 
     try {
       setResendLoading(true);
 
-      /* call resend OTP API */
-      const { data } = await axios.post(`http://localhost:5000/api/v1/login`, {
-        email,
-      });
-      alert(data.message);
+      const { data } = await axios.post(
+        `${process.env.NEXT_PUBLIC_USER_SERVICES_ROUTE}/api/v1/login`,
+        { email },
+      );
 
-      toast.success("OTP resent");
+      toast.success(data.message || "OTP resent");
+
       setTimer(60);
     } catch {
       toast.error("Failed to resend OTP");
@@ -198,6 +238,7 @@ export default function VerifyOtp() {
                 inputMode="numeric"
                 maxLength={1}
                 value={digit}
+                disabled={isLoading}
                 onChange={(e) => handleChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 className="w-12 h-14 text-center text-lg font-bold rounded-xl bg-muted outline-none focus:ring-2 focus:ring-primary"
@@ -205,17 +246,22 @@ export default function VerifyOtp() {
             ))}
           </div>
 
-          {/* Button */}
           <Button type="submit" disabled={isLoading} className="w-full h-12">
-            {isLoading ? "Verifying..." : "Verify & Continue"}
-            <ArrowRight className="ml-2 w-4 h-4" />
+            {isLoading ? (
+              <Loader2 className="animate-spin w-4 h-4" />
+            ) : (
+              <>
+                Verify & Continue
+                <ArrowRight className="ml-2 w-4 h-4" />
+              </>
+            )}
           </Button>
         </form>
 
         {/* Resend */}
         <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">
-            Didn&apost get the code?{" "}
+            Didn’t get the code?{" "}
             <button
               disabled={timer > 0 || resendLoading}
               onClick={handleResend}

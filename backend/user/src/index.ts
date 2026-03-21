@@ -6,44 +6,54 @@ import connectDB from "./configs/databaseconnection.js";
 import { createClient } from "redis";
 import userRoutes from "./routes/user.js";
 import { connectRabbitMq } from "./configs/rabbitmq.js";
+import type { Request, Response, NextFunction } from "express";
 
 dotenv.config();
-const port = process.env.PORT || 5000;
 
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
+const port = process.env.PORT || 5000;
 
-
-// // redis
-export const redisClient = createClient({
-  url: process.env.REDIS_URL!,
-});
-
-if (!redisClient) {
-  throw new Error("REDIS_URL is not defined");
-}
-redisClient
-  .connect()
-  .then(() => console.log("conneted to the redis"))
-  .catch(console.error);
-
-// CORS Configuration
+/* CORS */
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5000",
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
     credentials: true,
   })
 );
 
-// // rotuer routes
+/* Body Parser */
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+/* Redis */
+if (!process.env.REDIS_URL) {
+  throw new Error("REDIS_URL is not defined");
+}
+
+export const redisClient = createClient({
+  url: process.env.REDIS_URL,
+});
+
+redisClient
+  .connect()
+  .then(() => console.log("✅ Connected to Redis"))
+  .catch(console.error);
+
+/* Routes */
 app.use("/api/v1", userRoutes);
 
+/* JSON Error Handler */
+// app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+//   if (err instanceof SyntaxError) {
+//     return res.status(400).json({ message: "Invalid JSON format" });
+//   }
+//   next(err);
+// });
 
-
+/* Start Server */
 app.listen(port, () => {
   connectDB();
   connectRabbitMq();
-  console.log(`Server is running on port ${port}`);
+  console.log(`🚀 Server running on port ${port}`);
 });

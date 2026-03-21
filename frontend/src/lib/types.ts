@@ -1,0 +1,58 @@
+export interface User {
+  _id: string;
+  name: string;
+  email: string;
+  status?: "online" | "away" | "offline";
+}
+
+export interface Chat {
+  _id: string;
+  users: string[];
+  latestMessage: {
+    text: string;
+    sender: string;
+  };
+  createAt: string;
+  updateAt: string;
+  unseenCount?: number;
+}
+
+export interface Chats {
+  _id: string;
+  user: User;
+  chat: Chat;
+}
+
+export interface AppContextType {
+  user: User | null;
+  loading: boolean;
+  isAuth: boolean;
+
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  setIsAuth: React.Dispatch<React.SetStateAction<boolean>>;
+
+  logoutUser: () => Promise<void>;
+  fetchUsers: () => Promise<void>;
+  fetchChats: () => Promise<void>;
+
+  chats: Chats[] | null;
+  users: User[] | null;
+
+  setChats: React.Dispatch<React.SetStateAction<Chats[] | null>>;
+}
+
+export interface Message {
+  _id: string;
+  chatId: string;
+  sender: string;
+  text: string;
+  seen: boolean;
+  seenAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GetMessagesResponse {
+  messages: Message[];
+  user: User;
+}

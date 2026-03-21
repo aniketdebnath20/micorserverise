@@ -4,7 +4,8 @@ import { Chat } from "../models/Chat.js";
 import { Message } from "../models/Message.js";
 export const createNewChat = asyncHandler(async (req, res) => {
     const userId = req.user?._id;
-    const { otherUserId } = req.body;
+    const { otherUserId } = req.body || {};
+    console.log("req.body:", req.body);
     if (!otherUserId) {
         return res.status(400).json({
             message: "Other user ID is required",
@@ -130,5 +131,64 @@ export const sendMessage = asyncHandler(async (req, res) => {
         message: "Message sent successfully",
         data: savedMessage,
     });
+});
+export const getMessagesByChat = asyncHandler(async (req, res) => {
+    const userId = req.user?._id;
+    const { chatId } = req.params;
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+    }
+    if (!chatId) {
+        return res.status(400).json({ message: "chatId is required" });
+    }
+    /* ---------------- VERIFY CHAT ---------------- */
+    const chat = await Chat.findById(chatId);
+    if (!chat) {
+        return res.status(404).json({ message: "Chat not found" });
+    }
+    // user must be part of chat
+    if (!chat.users.some((id) => id.toString() === userId.toString())) {
+        return res.status(403).json({ message: "Access denied" });
+    }
+    /* ---------------- FETCH MESSAGES ---------------- */
+    const messages = await Message.find({ chatId })
+        .sort({ createdAt: 1 }) // oldest → newest
+        .lean();
+    /* ---------------- MARK AS SEEN ---------------- */
+    await Message.updateMany({
+        chatId,
+        sender: { $ne: userId },
+        seen: false,
+    }, {
+        $set: {
+            seen: true,
+            seenAt: new Date(),
+        },
+    });
+    const otherUserId = chat.users.find((id) => id !== userId);
+    try {
+        const { data } = await axios.get(`${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`);
+        if (!otherUserId) {
+            return res.status(400).json({
+                message: "Other user ID is required",
+            });
+        }
+        res.status(200).json({
+            messages,
+            user: data,
+        });
+    }
+    catch (error) {
+        res.status(200).json({
+            messages,
+            user: { _id: otherUserId, name: "unkonw" },
+        });
+    }
+    /* ---------------- RESPONSE ---------------- */
+    // res.status(200).json({
+    //   chatId,
+    //   count: messages.length,
+    //   messages,
+    // });
 });
 //# sourceMappingURL=chat.js.map

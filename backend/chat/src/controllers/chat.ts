@@ -25,12 +25,16 @@ export const createNewChat = asyncHandler(
       users: { $all: [userId, otherUserId], $size: 2 },
     });
 
+    /* CHAT ALREADY EXISTS */
+
     if (existingChat) {
-      return res.status(409).json({
+      return res.status(200).json({
         message: "Chat already exists",
         chatId: existingChat._id,
       });
     }
+
+    /* CREATE NEW CHAT */
 
     const newChat = await Chat.create({
       users: [userId, otherUserId],
@@ -40,7 +44,7 @@ export const createNewChat = asyncHandler(
       message: "Chat created successfully",
       chatId: newChat._id,
     });
-  },
+  }
 );
 
 export const getAllchat = asyncHandler(
@@ -213,7 +217,15 @@ export const getMessagesByChat = asyncHandler(
       },
     );
 
-    const otherUserId = chat.users.find((id) => id !== userId);
+    const otherUserId = chat.users.find(
+      (id) => id.toString() !== userId.toString(),
+    );
+    
+    if (!otherUserId) {
+      return res.status(400).json({
+        message: "Other user ID is required",
+      });
+    }
 
     try {
       const { data } = await axios.get(

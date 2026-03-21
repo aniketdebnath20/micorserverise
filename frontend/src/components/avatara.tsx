@@ -1,4 +1,4 @@
-import { User } from "@/smapledata";
+import { User } from "@/lib/types";
 
 interface AvatarCircleProps {
   user: User;
@@ -18,7 +18,8 @@ const statusSizeClasses = {
   lg: "w-3.5 h-3.5",
 };
 
-const getInitials = (name: string) => {
+const getInitials = (name?: string) => {
+  if (!name) return "?";
   return name
     .split(" ")
     .map((n) => n[0])
@@ -40,12 +41,18 @@ const avatarPalettes = [
 ];
 
 const getPalette = (id: string) => {
-  const index = id.charCodeAt(0) % avatarPalettes.length;
+  const hash = id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const index = hash % avatarPalettes.length;
   return avatarPalettes[index];
 };
 
-const AvatarCircle = ({ user, size = "md", showStatus = true }: AvatarCircleProps) => {
-  const palette = getPalette(user.id);
+const AvatarCircle = ({
+  user,
+  size = "md",
+  showStatus = true,
+}: AvatarCircleProps) => {
+  if (!user) return null; // Don't render anything if user is null
+  const palette = getPalette(user._id);
 
   return (
     <div className="relative flex-shrink-0">
@@ -56,12 +63,12 @@ const AvatarCircle = ({ user, size = "md", showStatus = true }: AvatarCircleProp
       </div>
       {showStatus && (
         <div
-          className={`absolute -bottom-0.5 -right-0.5 ${statusSizeClasses[size]} rounded-full border-2 border-card ${
+          className={`absolute -bottom-0.5 -right-0.5 ${statusSizeClasses[size]} rounded-full border-2 border-card bg-blue-300 text-red-600 ${
             user.status === "online"
               ? "bg-online"
               : user.status === "away"
-              ? "bg-away"
-              : "bg-offline"
+                ? "bg-away"
+                : "bg-offline"
           }`}
         />
       )}

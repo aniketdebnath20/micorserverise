@@ -11,7 +11,7 @@ import { isAuth } from "../middleware/isauth.js";
 
 const router = express.Router();
 router.post("/login", loginUser);
-router.post("verify", verifyUser);
+router.post("/verify", verifyUser);
 
 router.get("/me", isAuth, MyProfile);
 

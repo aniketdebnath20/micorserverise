@@ -1,40 +1,47 @@
 import express from "express";
 import dotenv from "dotenv";
-// import cookieParser from "cookie-parser";
-// import cors from "cors";
+import cookieParser from "cookie-parser";
+import cors from "cors";
 import connectDB from "./configs/databaseconnection.js";
 import { createClient } from "redis";
 import userRoutes from "./routes/user.js";
 import { connectRabbitMq } from "./configs/rabbitmq.js";
 dotenv.config();
-const port = process.env.PORT || 5000;
 const app = express();
+const port = process.env.PORT || 5000;
+/* CORS */
+app.use(cors({
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    credentials: true,
+}));
+/* Body Parser */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-// app.use(cookieParser());
-// // redis
+app.use(cookieParser());
+/* Redis */
+if (!process.env.REDIS_URL) {
+    throw new Error("REDIS_URL is not defined");
+}
 export const redisClient = createClient({
     url: process.env.REDIS_URL,
 });
-if (!redisClient) {
-    throw new Error("REDIS_URL is not defined");
-}
 redisClient
     .connect()
-    .then(() => console.log("conneted to the redis"))
+    .then(() => console.log("✅ Connected to Redis"))
     .catch(console.error);
-// // CORS Configuration
-// app.use(
-//   cors({
-//     origin: process.env.CLIENT_URL || "http://localhost:3000",
-//     credentials: true,
-//   })
-// );
-// // rotuer routes
+/* Routes */
 app.use("/api/v1", userRoutes);
+/* JSON Error Handler */
+// app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+//   if (err instanceof SyntaxError) {
+//     return res.status(400).json({ message: "Invalid JSON format" });
+//   }
+//   next(err);
+// });
+/* Start Server */
 app.listen(port, () => {
     connectDB();
     connectRabbitMq();
-    console.log(`Server is running on port ${port}`);
+    console.log(`🚀 Server running on port ${port}`);
 });
 //# sourceMappingURL=index.js.map
