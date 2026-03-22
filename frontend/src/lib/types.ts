@@ -5,15 +5,22 @@ export interface User {
   status?: "online" | "away" | "offline";
 }
 
+export interface LatestMessage {
+  _id?: string;
+  text: string;
+  sender: string;
+  createdAt?: string;
+}
+
 export interface Chat {
   _id: string;
   users: string[];
-  latestMessage: {
-    text: string;
-    sender: string;
-  };
-  createAt: string;
-  updateAt: string;
+
+  latestMessage: LatestMessage | null; // ✅ FIXED
+
+  createdAt: string; // fix typo
+  updatedAt: string; // fix typo
+
   unseenCount?: number;
 }
 

@@ -60,9 +60,13 @@ export default function AppProvider({
   const fetchChats = async () => {
     try {
       const token = Cookies.get("token");
+      if (!token) {
+        alert("fetch the all chat data buthe token is not herer");
+      }
 
       const { data } = await axios.post(
         `${process.env.NEXT_PUBLIC_CHAT_SERVICES_ROUTE}/api/v1/chat/all`,
+        {}, // empty body
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -70,11 +74,11 @@ export default function AppProvider({
         },
       );
 
-      setChats(data);
-      console.log("appcotnment",data)
-      console.log("appcotnment",data)
-      console.log("appcotnment",data)
-      console.log("appcotnment",data)
+      setChats(data.chats);
+      console.log("appcotnment", data.chats);
+      console.log("appcotnment", data);
+      console.log("appcotnment", data);
+      console.log("appcotnment", data);
     } catch (error) {
       console.log("Chat fetch failed", error);
     }
@@ -111,15 +115,18 @@ export default function AppProvider({
 
   useEffect(() => {
     fetchUsers();
-    fetchChats();
     fetchAllUsers();
+  }, []);
+
+  useEffect(() => {
+    if (isAuth) {
+      fetchChats();
+    }
   }, [isAuth]);
 
-
-
-  console.log("app coinenchat dfata",chats)
-  console.log("app coinenchat dfata",chats)
-  console.log("app coinenchat dfata",chats)
+  console.log("app coinenchat dfata", chats);
+  console.log("app coinenchat dfata", chats);
+  console.log("app coinenchat dfata", chats);
   return (
     <AppContext.Provider
       value={{

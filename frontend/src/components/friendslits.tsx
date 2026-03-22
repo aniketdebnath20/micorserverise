@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppContextData } from "@/context/appcontext";
 import AvatarCircle from "./avatara";
 import { Chats, User } from "@/lib/types";
 
@@ -18,6 +19,9 @@ const FriendListItem = ({
 }: FriendListItemProps) => {
   console.log("fried luis chat datat", ChatData);
   console.log(" friend list chat datat is here", ChatData);
+  console.log(ChatData?.chat);
+
+  const { user: loggedInUser } = useAppContextData();
 
   return (
     <button
@@ -37,9 +41,16 @@ const FriendListItem = ({
             </span>
           )}
         </div>
-        {ChatData?.chat.latestMessage && (
-          <p className="text-xs text-muted-foreground truncate leading-relaxed">
+        {ChatData?.chat?.latestMessage?.text ? (
+          <p className="text-xs text-muted-foreground truncate">
+            {ChatData.chat.latestMessage.sender === loggedInUser?._id
+              ? "You: "
+              : ""}
             {ChatData.chat.latestMessage.text}
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground italic">
+            No messages yet
           </p>
         )}
       </div>

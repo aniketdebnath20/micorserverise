@@ -4,15 +4,15 @@ import { asyncHandler } from "../utils/asynchandler.js";
 import { Chat } from "../models/Chat.js";
 import { Message } from "../models/Message.js";
 
+/* ================= CREATE CHAT ================= */
+
 export const createNewChat = asyncHandler(
   async (req: AuthenticatedRequest, res) => {
     const userId = req.user?._id;
     const { otherUserId } = req.body;
 
     if (!otherUserId) {
-      return res.status(400).json({
-        message: "Other user ID is required",
-      });
+      return res.status(400).json({ message: "Other user ID is required" });
     }
 
     if (userId?.toString() === otherUserId) {
@@ -25,16 +25,12 @@ export const createNewChat = asyncHandler(
       users: { $all: [userId, otherUserId], $size: 2 },
     });
 
-    /* CHAT ALREADY EXISTS */
-
     if (existingChat) {
       return res.status(200).json({
         message: "Chat already exists",
         chatId: existingChat._id,
       });
     }
-
-    /* CREATE NEW CHAT */
 
     const newChat = await Chat.create({
       users: [userId, otherUserId],
@@ -47,6 +43,8 @@ export const createNewChat = asyncHandler(
   }
 );
 
+/* ================= GET ALL CHATS ================= */
+
 export const getAllchat = asyncHandler(
   async (req: AuthenticatedRequest, res) => {
     const userId = req.user?._id;
@@ -55,62 +53,65 @@ export const getAllchat = asyncHandler(
       return res.status(400).json({ message: "User id is missing" });
     }
 
-    // 1️⃣ Get all chats of logged-in user
     const chats = await Chat.find({ users: userId })
       .sort({ updatedAt: -1 })
+      .populate({
+        path: "latestMessage.text", // ✅ IMPORTANT
+        select: "text sender createdAt",
+      })
       .lean();
 
-    // 2️⃣ Attach user + unseen count
     const chatWithUserData = await Promise.all(
-      chats.map(async (chat) => {
-        // find other user
+      chats.map(async (chat: any) => {
         const otherUserId = chat.users.find(
-          (id: any) => id.toString() !== userId.toString(),
+          (id: any) => id.toString() !== userId.toString()
         );
 
-        // unseen messages count
         const unseenCount = await Message.countDocuments({
           chatId: chat._id,
           sender: { $ne: userId },
           seen: false,
         });
 
-        // fetch other user data (microservice)
+        /* USER FETCH */
+        let userData;
         try {
           const { data } = await axios.get(
-            `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`,
+            `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`
           );
-
-          return {
-            user: data,
-            chat: {
-              ...chat,
-              latestMessage: chat.latestMessage || null,
-              unseenCount,
-            },
-          };
-        } catch (error) {
-          return {
-            user: {
-              _id: otherUserId,
-              name: "Unknown User",
-            },
-            chat: {
-              ...chat,
-              latestMessage: chat.latestMessage || null,
-              unseenCount,
-            },
-          };
+          userData = data;
+        } catch {
+          userData = { _id: otherUserId, name: "Unknown User" };
         }
-      }),
+
+        return {
+          user: userData,
+          chat: {
+            _id: chat._id,
+            users: chat.users,
+            createdAt: chat.createdAt,
+            updatedAt: chat.updatedAt,
+            unseenCount,
+
+            // ✅ FINAL FIX (NO findById anymore)
+            latestMessage: chat.latestMessage?.text
+              ? {
+                  _id: chat.latestMessage.text._id,
+                  text: chat.latestMessage.text.text,
+                  sender: chat.latestMessage.text.sender,
+                  createdAt: chat.latestMessage.text.createdAt,
+                }
+              : null,
+          },
+        };
+      })
     );
 
-    // 3️⃣ Send final response
-    res.json({
-      chats: chatWithUserData,
-    });
-  },
+    res.json({ chats: chatWithUserData });
+  }
 );
+
+/* ================= SEND MESSAGE ================= */
 
 export const sendMessage = asyncHandler(
   async (req: AuthenticatedRequest, res) => {
@@ -132,7 +133,6 @@ export const sendMessage = asyncHandler(
       });
     }
 
-    // 🔍 Validate chat
     const chat = await Chat.findById(chatId);
     if (!chat) {
       return res.status(404).json({ message: "Chat not found" });
@@ -142,7 +142,6 @@ export const sendMessage = asyncHandler(
       return res.status(403).json({ message: "Access denied" });
     }
 
-    /* ---------------- MESSAGE DATA ---------------- */
     const messageData: any = {
       chatId,
       sender: senderId,
@@ -158,21 +157,25 @@ export const sendMessage = asyncHandler(
       };
     }
 
-    // 💾 Save message
     const savedMessage = await Message.create(messageData);
 
-    // 🆕 Update latest message (store message ID – BEST PRACTICE)
+    // ✅ ONLY STORE MESSAGE ID (CORRECT)
     await Chat.findByIdAndUpdate(chatId, {
-      latestMessage: savedMessage._id,
+      latestMessage: {
+        text: savedMessage._id,
+        sender: senderId,
+      },
       updatedAt: new Date(),
     });
 
     res.status(201).json({
-      message: "Message sent successfully",
+      message: "Message sent",
       data: savedMessage,
     });
-  },
+  }
 );
+
+/* ================= GET MESSAGES ================= */
 
 export const getMessagesByChat = asyncHandler(
   async (req: AuthenticatedRequest, res) => {
@@ -187,22 +190,21 @@ export const getMessagesByChat = asyncHandler(
       return res.status(400).json({ message: "chatId is required" });
     }
 
-    /* ---------------- VERIFY CHAT ---------------- */
     const chat = await Chat.findById(chatId);
     if (!chat) {
       return res.status(404).json({ message: "Chat not found" });
     }
 
-    // user must be part of chat
     if (!chat.users.some((id: any) => id.toString() === userId.toString())) {
       return res.status(403).json({ message: "Access denied" });
     }
-    /* ---------------- FETCH MESSAGES ---------------- */
+
+    // ✅ FIXED (YOU HAD BUG HERE)
     const messages = await Message.find({ chatId })
-      .sort({ createdAt: 1 }) // oldest → newest
+      .sort({ createdAt: 1 })
       .lean();
 
-    /* ---------------- MARK AS SEEN ---------------- */
+    // mark seen
     await Message.updateMany(
       {
         chatId,
@@ -214,45 +216,26 @@ export const getMessagesByChat = asyncHandler(
           seen: true,
           seenAt: new Date(),
         },
-      },
+      }
     );
 
     const otherUserId = chat.users.find(
-      (id) => id.toString() !== userId.toString(),
+      (id) => id.toString() !== userId.toString()
     );
-    
-    if (!otherUserId) {
-      return res.status(400).json({
-        message: "Other user ID is required",
-      });
-    }
 
+    let userData;
     try {
       const { data } = await axios.get(
-        `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`,
+        `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`
       );
-
-      if (!otherUserId) {
-        return res.status(400).json({
-          message: "Other user ID is required",
-        });
-      }
-      res.status(200).json({
-        messages,
-        user: data,
-      });
-    } catch (error) {
-      res.status(200).json({
-        messages,
-        user: { _id: otherUserId, name: "unkonw" },
-      });
+      userData = data;
+    } catch {
+      userData = { _id: otherUserId, name: "Unknown User" };
     }
 
-    /* ---------------- RESPONSE ---------------- */
-    // res.status(200).json({
-    //   chatId,
-    //   count: messages.length,
-    //   messages,
-    // });
-  },
+    res.status(200).json({
+      messages,
+      user: userData,
+    });
+  }
 );

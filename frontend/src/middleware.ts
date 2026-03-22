@@ -32,7 +32,7 @@ export function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/",                // protect root
-    // "/chat/:path*",
+    "/chat/:path*",
     "/profile/:path*",
     "/login",
     "/signup",

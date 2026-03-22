@@ -104,20 +104,30 @@ const Chat = () => {
 
   /* ---------------- SELECT FRIEND ---------------- */
   /* ---------------- SELECT FRIEND ---------------- */
+  const { chats } = useAppContextData();
 
   const handleSelectFriend = async (friendId: string) => {
     setActiveFriendId(friendId);
 
     if (isMobile) setSidebarOpen(false);
 
-    const id = await createChat(friendId); // returns chatId
+    // ✅ 1. Check if chat already exists in state
+    const existingChat = chats?.find((c) => c.user._id === friendId);
+
+    let id;
+
+    if (existingChat) {
+      // ✅ use existing chat
+      id = existingChat.chat._id;
+    } else {
+      // ❌ only call API if chat doesn't exist
+      id = await createChat(friendId);
+    }
+
     if (!id) return;
 
-    setChatId(id); // store chatId in state
+    setChatId(id);
     await fetchChat(id);
-
-    // DO NOT call sendMessage here unless you have text
-    // sendMessage("Hello!", id); // ✅ only call with text
   };
 
   /* ---------------- FIND ACTIVE FRIEND ---------------- */

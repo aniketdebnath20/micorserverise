@@ -2,7 +2,7 @@ import mongoose, { Types, type Document } from "mongoose";
 export interface IChat extends Document {
     users: Types.ObjectId[];
     latestMessage?: {
-        text: string;
+        text: Types.ObjectId;
         sender: Types.ObjectId;
     };
     createdAt: Date;

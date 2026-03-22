@@ -4,7 +4,7 @@ export interface IChat extends Document {
   users: Types.ObjectId[];
 
   latestMessage?: {
-    text: string;
+    text: Types.ObjectId; // message ID
     sender: Types.ObjectId;
   };
 
@@ -12,13 +12,18 @@ export interface IChat extends Document {
   updatedAt: Date;
 }
 
+const latestMessageSchema = new Schema(
+  {
+    text: { type: Schema.Types.ObjectId, ref: "Message" },
+    sender: { type: Schema.Types.ObjectId, ref: "User" },
+  },
+  { _id: false }
+);
+
 const chatSchema = new Schema<IChat>(
   {
     users: [{ type: Schema.Types.ObjectId, ref: "User", required: true }],
-    latestMessage: {
-      text: { type: String },
-      sender: { type: Schema.Types.ObjectId, ref: "User" },
-    },
+    latestMessage: latestMessageSchema,
   },
   { timestamps: true },
 );
