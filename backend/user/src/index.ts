@@ -7,10 +7,11 @@ import { createClient } from "redis";
 import userRoutes from "./routes/user.js";
 import { connectRabbitMq } from "./configs/rabbitmq.js";
 import type { Request, Response, NextFunction } from "express";
+import { app, server } from "./configs/socket.js";
 
 dotenv.config();
 
-const app = express();
+// const app = express();
 const port = process.env.PORT || 5000;
 
 /* CORS */
@@ -52,7 +53,7 @@ app.use("/api/v1", userRoutes);
 // });
 
 /* Start Server */
-app.listen(port, () => {
+server.listen(port, () => {
   connectDB();
   connectRabbitMq();
   console.log(`🚀 Server running on port ${port}`);

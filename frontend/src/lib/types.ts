@@ -1,3 +1,5 @@
+import { Socket } from "socket.io-client";
+
 export interface User {
   _id: string;
   name: string;
@@ -62,4 +64,9 @@ export interface Message {
 export interface GetMessagesResponse {
   messages: Message[];
   user: User;
+}
+
+export interface SocketContextTypes {
+  socket: Socket | null;
+  onlineUsers: string[];
 }

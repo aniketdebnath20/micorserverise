@@ -14,11 +14,14 @@ import MessageBubble from "./messagebubble";
 import AvatarCircle from "./avatara";
 import { Message, User } from "@/lib/types";
 import { useAppContextData } from "@/context/appcontext";
+import { useSocket } from "@/context/socketcontext";
 
 interface ChatAreaProps {
   friend: User | null;
   messages: Message[];
   onSendMessage: (text: string) => void;
+  onTyping: () => void;
+  isTyping: boolean;
   onOpenSidebar?: () => void;
 }
 
@@ -27,6 +30,8 @@ const ChatArea = ({
   messages = [],
   onSendMessage,
   onOpenSidebar,
+  onTyping,
+  isTyping,
 }: ChatAreaProps) => {
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -41,14 +46,69 @@ const ChatArea = ({
   }, [messages]);
 
   /* ---------------- SEND MESSAGE ---------------- */
+  // const { socket } = useSocket();
 
   const handleSend = () => {
     const text = newMessage.trim();
     if (!text) return;
 
+    //   if (typingTimeOut) {
+    //     clearTimeout(typingTimeOut);
+    //     setTypingTimeOut(null);
+    //   }
+
+    //   socket?.emit("stopTyping", {
+    //     chatId: id,
+    //     userId: id,
+    //   });
+
+    //   if (text.trim()) {
+    //     socket?.emit("typing", {
+    //       chaId: id,
+    //       userId: id,
+    //     });
+    //   }
+
+    //   if (typingTimeOut) {
+    //     clearTimeout(typingTimeOut);
+    //   }
+
+    //   const timeout = setTimeout(() => {
+    //     socket?.emit("stopTyping", {
+    //       chatId: id,
+    //       userId: id,
+    //     });
+    //   }, 2000);
+
+    //   setTypingTimeOut(timeout);
+
     onSendMessage(text);
     setNewMessage("");
   };
+
+  // useEffect(() => {
+  //   socket?.on("userTyping", (data) => {
+  //     console.log("recive the user typing on the coket work", data);
+  //     if (data.chaId === selectedUser && data.userId !== loggedInUser._id) {
+  //       setIsTyping(true);
+  //     }
+  //   });
+
+  //   socket?.on("userStoppedTyping", (data) => {
+  //     console.log(
+  //       "recive the user  stop the type stop typing on the coket work",
+  //       data,
+  //     );
+  //     if (data.chaId === selectedUser && data.userId !== loggedInUser._id) {
+  //       setIsTyping(false);
+  //     }
+  //   });
+
+  //   return () => {
+  //     socket?.off("userTyping");
+  //     socket?.off("userStoppedTyping");
+  //   };
+  // }, [socket]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -57,6 +117,26 @@ const ChatArea = ({
     }
   };
 
+  // useEffect(() => {
+  //   if (selcetiedUser) {
+  //     setIsTyping(false);
+
+  //     socket?.emit("jionChat", selectedUser);
+  //   }
+
+  //   return () => {
+  //     socket?.emit("leaveChat", selectedUser);
+  //     setNewMessage(null);
+  //   };
+  // }, [selctedUser, socket]);
+
+  // useEffect(() => {
+  //   return () => {
+  //     if (typingTimeOut) {
+  //       clearTimeout(typingTimeOut);
+  //     }
+  //   };
+  // }, [typingTimeOut]);
   /* ---------------- NO FRIEND SELECTED ---------------- */
 
   if (!friend) {
@@ -119,6 +199,11 @@ const ChatArea = ({
                   ? "Away"
                   : "Offline"}
             </p>
+            {isTyping && (
+              <div className="text-xs text-muted-foreground mb-2">
+                typing...
+              </div>
+            )}
           </div>
         </div>
 
@@ -171,7 +256,13 @@ const ChatArea = ({
           <input
             type="text"
             value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
+            onChange={(e) => {
+              setNewMessage(e.target.value);
+
+              if (e.target.value.trim()) {
+                onTyping();
+              }
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Write something..."
             className="flex-1 px-5 py-3 rounded-2xl bg-muted text-sm outline-none"

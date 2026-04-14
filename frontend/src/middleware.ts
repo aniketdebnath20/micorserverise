@@ -12,7 +12,7 @@ export function middleware(request: NextRequest) {
   );
 
   /* If user is NOT logged in and tries protected route */
-  if (!token && !isPublicRoute) {
+  if (!token && !isPublicRoute) {             
     return NextResponse.redirect(new URL("/signup", request.url));
   }
 

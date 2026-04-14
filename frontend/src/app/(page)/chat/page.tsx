@@ -1,58 +1,87 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ChatSidebar from "@/components/chatsidebar";
 import ChatArea from "@/components/chatarear";
 import { useIsMobile } from "@/hook/use-mobile";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useAppContextData } from "@/context/appcontext";
-import { Chats } from "@/lib/types";
 import axios from "axios";
 import Cookies from "js-cookie";
+import { useSocket } from "@/context/socketcontext";
 
 const Chat = () => {
-  const { users } = useAppContextData();
+  const { users, chats } = useAppContextData();
+  const { socket, onlineUsers } = useSocket();
 
   const [activeFriendId, setActiveFriendId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
+  const [isTyping, setIsTyping] = useState(false);
 
   const isMobile = useIsMobile();
 
+  useEffect(() => {
+    if (!socket || !chatId) return;
+
+    socket.emit("joinChat", chatId);
+
+    return () => {
+      socket.emit("leaveChat", chatId);
+    };
+  }, [socket, chatId]);
+
+  /* ---------------- LISTEN NEW MESSAGE ---------------- */
+
+  /* ---------------- TYPING LISTENER ---------------- */
+  useEffect(() => {
+    if (!socket) return;
+
+    socket.on("userTyping", () => setIsTyping(true));
+    socket.on("userStoppedTyping", () => setIsTyping(false));
+
+    return () => {
+      socket.off("userTyping");
+      socket.off("userStoppedTyping");
+    };
+  }, [socket]);
+
+  /* ---------------- SEND MESSAGE ---------------- */
   const sendMessage = async (text: string) => {
-    if (!chatId) {
-      alert("id is required herer");
-      return;
-    } // chat must exist
+    if (!chatId) return;
+
+    socket?.emit("stopTyping", { chatId });
+
     try {
       const token = Cookies.get("token");
 
-      const { data } = await axios.post(
+      await axios.post(
         `${process.env.NEXT_PUBLIC_CHAT_SERVICES_ROUTE}/api/v1/message`,
-        {
-          chatId,
-          text,
-        },
+        { chatId, text },
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        },
+        }
       );
-
-      // Append the new message to the current messages state
-      setMessages((prev) => [...prev, data.data]);
     } catch (error: any) {
-      console.error(
-        "Failed to send message:",
-        error.response?.data || error.message,
-      );
+      console.error("Failed to send message:", error);
     }
   };
 
-  /* ---------------- CREATE CHAT ID---------------- */
+  /* ---------------- TYPING EMIT ---------------- */
+  const handleTyping = () => {
+    if (!socket || !chatId) return;
 
+    socket.emit("typing", { chatId });
+
+    setTimeout(() => {
+      socket.emit("stopTyping", { chatId });
+    }, 2000);
+  };
+
+  /* ---------------- CREATE CHAT ---------------- */
   const createChat = async (friendId: string) => {
     try {
       const token = Cookies.get("token");
@@ -61,26 +90,19 @@ const Chat = () => {
         `${process.env.NEXT_PUBLIC_CHAT_SERVICES_ROUTE}/api/v1/chat/new`,
         { otherUserId: friendId },
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-      return data.chatId;
-    } catch (error: any) {
-      console.error(
-        "Failed to create chat:",
-        error.response?.data || error.message,
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
 
+      return data.chatId;
+    } catch (error: any) {
       if (error.response?.data?.chatId) {
         return error.response.data.chatId;
       }
     }
   };
 
-  /* ---------------- FETCH MESSAGES ---------------- */
-
+  /* ---------------- FETCH CHAT ---------------- */
   const fetchChat = async (id: string) => {
     try {
       const token = Cookies.get("token");
@@ -88,39 +110,29 @@ const Chat = () => {
       const { data } = await axios.get(
         `${process.env.NEXT_PUBLIC_CHAT_SERVICES_ROUTE}/api/v1/messages/${id}`,
         {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
 
-      console.log("Fetched messages:", data);
-
-      setMessages(data.messages); // ✅ STORE IN STATE
+      setMessages(data.messages);
     } catch (error) {
-      console.log("Failed to fetch messages", error);
+      console.log(error);
     }
   };
 
   /* ---------------- SELECT FRIEND ---------------- */
-  /* ---------------- SELECT FRIEND ---------------- */
-  const { chats } = useAppContextData();
-
   const handleSelectFriend = async (friendId: string) => {
     setActiveFriendId(friendId);
 
     if (isMobile) setSidebarOpen(false);
 
-    // ✅ 1. Check if chat already exists in state
     const existingChat = chats?.find((c) => c.user._id === friendId);
 
     let id;
 
     if (existingChat) {
-      // ✅ use existing chat
       id = existingChat.chat._id;
     } else {
-      // ❌ only call API if chat doesn't exist
       id = await createChat(friendId);
     }
 
@@ -130,11 +142,8 @@ const Chat = () => {
     await fetchChat(id);
   };
 
-  /* ---------------- FIND ACTIVE FRIEND ---------------- */
-
-  const activeFriend = users?.find((u) => u._id === activeFriendId) || null;
-
-  /* ---------------- UI ---------------- */
+  const activeFriend =
+    users?.find((u) => u._id === activeFriendId) || null;
 
   const sidebar = (
     <ChatSidebar
@@ -159,8 +168,12 @@ const Chat = () => {
       <ChatArea
         friend={activeFriend}
         messages={messages}
-        onSendMessage={sendMessage} // ✅ now actually sends text
-        onOpenSidebar={isMobile ? () => setSidebarOpen(true) : undefined}
+        onSendMessage={sendMessage}
+        onTyping={handleTyping}
+        isTyping={isTyping}
+        onOpenSidebar={
+          isMobile ? () => setSidebarOpen(true) : undefined
+        }
       />
     </div>
   );

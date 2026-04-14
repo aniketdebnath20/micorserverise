@@ -3,6 +3,7 @@
 import { useAppContextData } from "@/context/appcontext";
 import AvatarCircle from "./avatara";
 import { Chats, User } from "@/lib/types";
+import { useSocket } from "@/context/socketcontext";
 
 interface FriendListItemProps {
   ChatData?: Chats;
@@ -23,13 +24,23 @@ const FriendListItem = ({
 
   const { user: loggedInUser } = useAppContextData();
 
+  const { onlineUsers } = useSocket();
+  const isOnline = onlineUsers?.includes(user._id);
+
   return (
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-200 text-left
         ${isActive ? "bg-primary/8 shadow-sm" : "hover:bg-muted"}`}
     >
-      <AvatarCircle user={user} size="md" />
+      <div className="relative">
+        <AvatarCircle user={user} size="md" />
+
+        {isOnline && (
+          <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+        )}
+      </div>
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
           <span className="font-semibold text-[13px] truncate text-foreground">
