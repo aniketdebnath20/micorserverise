@@ -38,10 +38,35 @@ const Chat = () => {
   useEffect(() => {
     if (!socket) return;
 
+    socket.on("newMessage", (message) => {
+       console.log("socket new message fuction receid withe socet io",message)
+      
+       if(selectedUser === message.chatId){
+        setMessages((prev) => {
+          const currentMessage = prev || [];
+
+          const messageExits = currentMessage.some(
+            (msg) => msg._id === message._id
+          )
+
+          if(!messageExits){
+            return [...currentMessage,message];
+          }
+
+          return currentMessage;
+        })
+
+        moveChatTop(message.chatId,message,false)
+       }    
+     
+    })
+
+
     socket.on("userTyping", () => setIsTyping(true));
     socket.on("userStoppedTyping", () => setIsTyping(false));
 
     return () => {
+      socket.off("newMessage");
       socket.off("userTyping");
       socket.off("userStoppedTyping");
     };
@@ -63,7 +88,7 @@ const Chat = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
     } catch (error: any) {
       console.error("Failed to send message:", error);
@@ -91,7 +116,7 @@ const Chat = () => {
         { otherUserId: friendId },
         {
           headers: { Authorization: `Bearer ${token}` },
-        }
+        },
       );
 
       return data.chatId;
@@ -111,7 +136,7 @@ const Chat = () => {
         `${process.env.NEXT_PUBLIC_CHAT_SERVICES_ROUTE}/api/v1/messages/${id}`,
         {
           headers: { Authorization: `Bearer ${token}` },
-        }
+        },
       );
 
       setMessages(data.messages);
@@ -142,8 +167,7 @@ const Chat = () => {
     await fetchChat(id);
   };
 
-  const activeFriend =
-    users?.find((u) => u._id === activeFriendId) || null;
+  const activeFriend = users?.find((u) => u._id === activeFriendId) || null;
 
   const sidebar = (
     <ChatSidebar
@@ -151,6 +175,65 @@ const Chat = () => {
       onSelectFriend={handleSelectFriend}
     />
   );
+
+  // socket io
+
+  const moveChatTop = (
+    chatId: string,
+    newMessage: any,
+    updatedUnseenCount = true,
+  ) => {
+    setChats((prev) => {
+      if (!prev) return null;
+
+      const updateChats = [...prev];
+      const chatIndex = updateChats.findIndex(
+        (chat) => chat.chat._id === chatId,
+      );
+
+      if (chatIndex !== -1) {
+        const [moveChat] = updateChats.splice(chatIndex, 1);
+
+        const updateChat = {
+          ...moveChat,
+          chat: {
+            ...moveChat.chat,
+            latesMessage: {
+              text: newMessage.text,
+              sender: newMessage.sender,
+            },
+            updatedAt: new Date().toString(),
+
+            unseenCount: updatedUnseenCount && newMessage.sender !== loggedInUser?._id ? (moveChat.chat.unseenCount || 0) + 1 : moveChat.chat.unseenCount || 0,
+          },
+        };
+
+        updateChats.unshift(updateChat);
+      }
+      return updateChats;
+    });
+  };
+
+  const resetUnseenCount () => {
+    setChats((prev) => {
+      if (!prev) return null;
+
+      return prev.map((chat) => {
+        if (chat.chat._id === chatId) {
+          return {
+            ...chat,
+            chat: {
+              ...chat.chat,
+              unseenCount: 0
+            }
+          }
+        }
+
+        return chat;
+
+      })
+    })
+  }
 
   return (
     <div className="flex h-screen bg-background">
@@ -171,9 +254,7 @@ const Chat = () => {
         onSendMessage={sendMessage}
         onTyping={handleTyping}
         isTyping={isTyping}
-        onOpenSidebar={
-          isMobile ? () => setSidebarOpen(true) : undefined
-        }
+        onOpenSidebar={isMobile ? () => setSidebarOpen(true) : undefined}
       />
     </div>
   );

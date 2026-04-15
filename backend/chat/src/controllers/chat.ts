@@ -3,6 +3,8 @@ import type { AuthenticatedRequest } from "../middleware/isauth.js";
 import { asyncHandler } from "../utils/asynchandler.js";
 import { Chat } from "../models/Chat.js";
 import { Message } from "../models/Message.js";
+import { getRecieverSocketId, io } from "../config/socket.js";
+import { fstat } from "node:fs";
 
 /* ================= CREATE CHAT ================= */
 
@@ -40,7 +42,7 @@ export const createNewChat = asyncHandler(
       message: "Chat created successfully",
       chatId: newChat._id,
     });
-  }
+  },
 );
 
 /* ================= GET ALL CHATS ================= */
@@ -64,7 +66,7 @@ export const getAllchat = asyncHandler(
     const chatWithUserData = await Promise.all(
       chats.map(async (chat: any) => {
         const otherUserId = chat.users.find(
-          (id: any) => id.toString() !== userId.toString()
+          (id: any) => id.toString() !== userId.toString(),
         );
 
         const unseenCount = await Message.countDocuments({
@@ -77,7 +79,7 @@ export const getAllchat = asyncHandler(
         let userData;
         try {
           const { data } = await axios.get(
-            `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`
+            `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`,
           );
           userData = data;
         } catch {
@@ -104,11 +106,11 @@ export const getAllchat = asyncHandler(
               : null,
           },
         };
-      })
+      }),
     );
 
     res.json({ chats: chatWithUserData });
-  }
+  },
 );
 
 /* ================= SEND MESSAGE ================= */
@@ -142,12 +144,40 @@ export const sendMessage = asyncHandler(
       return res.status(403).json({ message: "Access denied" });
     }
 
+    /* ===============================
+       FIND RECEIVER + ROOM CHECK
+    =============================== */
+
+    const receiverId = chat.users.find(
+      (id: any) => id.toString() !== senderId.toString(),
+    );
+
+    let isReceiverInChatRoom = false;
+    let receiverSocketId: string | undefined;
+
+    if (receiverId) {
+      receiverSocketId = getRecieverSocketId(receiverId.toString());
+
+      if (receiverSocketId) {
+        const receiverSocket = io.sockets.sockets.get(receiverSocketId);
+
+        if (receiverSocket && receiverSocket.rooms.has(chatId)) {
+          isReceiverInChatRoom = true;
+        }
+      }
+    }
+
+    /* ===============================
+       CREATE MESSAGE
+    =============================== */
+
     const messageData: any = {
       chatId,
       sender: senderId,
       text: text || "",
       messageType: imageFile ? "image" : "text",
-      seen: false,
+      seen: isReceiverInChatRoom,
+      seenAt: isReceiverInChatRoom ? new Date() : undefined,
     };
 
     if (imageFile) {
@@ -159,7 +189,10 @@ export const sendMessage = asyncHandler(
 
     const savedMessage = await Message.create(messageData);
 
-    // ✅ ONLY STORE MESSAGE ID (CORRECT)
+    /* ===============================
+       UPDATE CHAT
+    =============================== */
+
     await Chat.findByIdAndUpdate(chatId, {
       latestMessage: {
         text: savedMessage._id,
@@ -168,11 +201,41 @@ export const sendMessage = asyncHandler(
       updatedAt: new Date(),
     });
 
+    /* ===============================
+       SOCKET EMITS
+    =============================== */
+
+    // emit to room
+    io.to(chatId).emit("newMessage", savedMessage);
+
+    // emit to receiver directly
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("newMessage", savedMessage);
+    }
+
+    // emit to sender
+    const senderSocketId = getRecieverSocketId(senderId.toString());
+
+    if (senderSocketId) {
+      io.to(senderSocketId).emit("newMessage", savedMessage);
+    }
+
+    // message seen emit
+    if (isReceiverInChatRoom && senderSocketId) {
+      io.to(senderSocketId).emit("messageSeen", {
+        chatId: chatId,
+        seenBy: receiverId,
+        messageIds: [savedMessage._id],
+      });
+    }
+
+    /* =============================== */
+
     res.status(201).json({
       message: "Message sent",
       data: savedMessage,
     });
-  }
+  },
 );
 
 /* ================= GET MESSAGES ================= */
@@ -199,12 +262,25 @@ export const getMessagesByChat = asyncHandler(
       return res.status(403).json({ message: "Access denied" });
     }
 
-    // ✅ FIXED (YOU HAD BUG HERE)
+    /* ===============================
+       GET MESSAGES
+    =============================== */
     const messages = await Message.find({ chatId })
       .sort({ createdAt: 1 })
       .lean();
 
-    // mark seen
+    /* ===============================
+       FIND UNSEEN
+    =============================== */
+    const messageToMarkSeen = await Message.find({
+      chatId: chatId,
+      sender: { $ne: userId },
+      seen: false,
+    });
+
+    /* ===============================
+       MARK SEEN
+    =============================== */
     await Message.updateMany(
       {
         chatId,
@@ -216,26 +292,48 @@ export const getMessagesByChat = asyncHandler(
           seen: true,
           seenAt: new Date(),
         },
-      }
+      },
     );
 
+    /* ===============================
+       FIND OTHER USER
+    =============================== */
     const otherUserId = chat.users.find(
-      (id) => id.toString() !== userId.toString()
+      (id) => id.toString() !== userId.toString(),
     );
 
     let userData;
     try {
       const { data } = await axios.get(
-        `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`
+        `${process.env.USER_SERVICE}/api/v1/user/${otherUserId}`,
       );
       userData = data;
     } catch {
       userData = { _id: otherUserId, name: "Unknown User" };
     }
 
+    /* ===============================
+       EMIT SEEN
+    =============================== */
+    if (otherUserId && messageToMarkSeen.length > 0) {
+      const otherUserSocketId = getRecieverSocketId(
+        otherUserId.toString()
+      );
+
+      if (otherUserSocketId) {
+        io.to(otherUserSocketId).emit("messageSeen", {
+          chatId: chatId,
+          seenBy: userId,
+          messageIds: messageToMarkSeen.map((msg) => msg._id),
+        });
+      }
+    }
+
+    /* =============================== */
+
     res.status(200).json({
       messages,
       user: userData,
     });
-  }
+  },
 );

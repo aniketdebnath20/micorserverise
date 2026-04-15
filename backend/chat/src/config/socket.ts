@@ -14,6 +14,10 @@ const io = new Server(server, {
 
 const userSocketMap: Record<string, string> = {};
 
+export const getRecieverSocketId = (recieverid: string): string | undefined => {
+  return userSocketMap[recieverid];
+};
+
 // Listen for connections
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
@@ -28,21 +32,6 @@ io.on("connection", (socket) => {
 
   if (userId) socket.join(userId);
 
-  // socket.on("typing", (data) => {
-  //   console.log("typing the server socket id");
-  //   socket.to(data.chatId).emit("userTyping", {
-  //     chatId: data.chatId,
-  //     userId: data.userId,
-  //   });
-  // });
-
-  // socket.on("stopTyping", (data) => {
-  //   console.log("stoptyping the srever side socket io");
-  //   socket.to(data.chatId).emit("userStoppedTyping", {
-  //     chatId: data.chatId,
-  //     userId: data.userId,
-  //   });
-  // });
 
   socket.on("typing", ({ chatId }) => {
     console.log("typing the server socket id");
@@ -59,10 +48,10 @@ io.on("connection", (socket) => {
     console.log("jion chat ont he servertonsocket io");
   });
 
-  socket.on("leaveChat", (chatId) => {
-    socket.join(chatId);
-    console.log("leagy ;efy leave chat ont he servertonsocket io");
-  });
+socket.on("leaveChat", (chatId) => {
+  socket.leave(chatId);
+  console.log("leave chat on server socket io");
+});
 
   // Handle disconnect
   socket.on("disconnect", () => {
