@@ -36,79 +36,22 @@ const ChatArea = ({
   const [newMessage, setNewMessage] = useState("");
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAppContextData();
+  const { onlineUsers } = useSocket();
 
-  const currentUserId = user?._id; // current logged in user
-
-  /* ---------------- AUTO SCROLL ---------------- */
+  const currentUserId = user?._id;
+  const isFriendOnline = friend ? onlineUsers.includes(friend._id) : false;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  /* ---------------- SEND MESSAGE ---------------- */
-  // const { socket } = useSocket();
-
   const handleSend = () => {
     const text = newMessage.trim();
     if (!text) return;
 
-    //   if (typingTimeOut) {
-    //     clearTimeout(typingTimeOut);
-    //     setTypingTimeOut(null);
-    //   }
-
-    //   socket?.emit("stopTyping", {
-    //     chatId: id,
-    //     userId: id,
-    //   });
-
-    //   if (text.trim()) {
-    //     socket?.emit("typing", {
-    //       chaId: id,
-    //       userId: id,
-    //     });
-    //   }
-
-    //   if (typingTimeOut) {
-    //     clearTimeout(typingTimeOut);
-    //   }
-
-    //   const timeout = setTimeout(() => {
-    //     socket?.emit("stopTyping", {
-    //       chatId: id,
-    //       userId: id,
-    //     });
-    //   }, 2000);
-
-    //   setTypingTimeOut(timeout);
-
     onSendMessage(text);
     setNewMessage("");
   };
-
-  // useEffect(() => {
-  //   socket?.on("userTyping", (data) => {
-  //     console.log("recive the user typing on the coket work", data);
-  //     if (data.chaId === selectedUser && data.userId !== loggedInUser._id) {
-  //       setIsTyping(true);
-  //     }
-  //   });
-
-  //   socket?.on("userStoppedTyping", (data) => {
-  //     console.log(
-  //       "recive the user  stop the type stop typing on the coket work",
-  //       data,
-  //     );
-  //     if (data.chaId === selectedUser && data.userId !== loggedInUser._id) {
-  //       setIsTyping(false);
-  //     }
-  //   });
-
-  //   return () => {
-  //     socket?.off("userTyping");
-  //     socket?.off("userStoppedTyping");
-  //   };
-  // }, [socket]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -116,28 +59,6 @@ const ChatArea = ({
       handleSend();
     }
   };
-
-  // useEffect(() => {
-  //   if (selcetiedUser) {
-  //     setIsTyping(false);
-
-  //     socket?.emit("jionChat", selectedUser);
-  //   }
-
-  //   return () => {
-  //     socket?.emit("leaveChat", selectedUser);
-  //     setNewMessage(null);
-  //   };
-  // }, [selctedUser, socket]);
-
-  // useEffect(() => {
-  //   return () => {
-  //     if (typingTimeOut) {
-  //       clearTimeout(typingTimeOut);
-  //     }
-  //   };
-  // }, [typingTimeOut]);
-  /* ---------------- NO FRIEND SELECTED ---------------- */
 
   if (!friend) {
     return (
@@ -170,12 +91,8 @@ const ChatArea = ({
     );
   }
 
-  /* ---------------- CHAT UI ---------------- */
-
   return (
     <div className="flex-1 flex flex-col bg-background">
-      {/* HEADER */}
-
       <div className="h-[68px] px-4 md:px-6 flex items-center justify-between border-b border-border bg-card">
         <div className="flex items-center gap-3">
           {onOpenSidebar && (
@@ -191,18 +108,15 @@ const ChatArea = ({
 
           <div>
             <h3 className="font-semibold text-sm">{friend.name}</h3>
-
             <p className="text-xs text-muted-foreground">
-              {friend.status === "online"
+              {isFriendOnline
                 ? "Active now"
                 : friend.status === "away"
                   ? "Away"
                   : "Offline"}
             </p>
             {isTyping && (
-              <div className="text-xs text-muted-foreground mb-2">
-                typing...
-              </div>
+              <div className="text-xs text-muted-foreground">typing...</div>
             )}
           </div>
         </div>
@@ -218,8 +132,6 @@ const ChatArea = ({
           ))}
         </div>
       </div>
-
-      {/* MESSAGES */}
 
       <div className="flex-1 overflow-y-auto px-6 py-5 chat-scroll">
         {messages.length === 0 && (
@@ -239,8 +151,6 @@ const ChatArea = ({
         <div ref={messagesEndRef} />
       </div>
 
-      {/* INPUT */}
-
       <div className="px-5 py-4 border-t border-border bg-card">
         <div className="flex items-center gap-3">
           <div className="flex gap-1">
@@ -258,7 +168,6 @@ const ChatArea = ({
             value={newMessage}
             onChange={(e) => {
               setNewMessage(e.target.value);
-
               if (e.target.value.trim()) {
                 onTyping();
               }

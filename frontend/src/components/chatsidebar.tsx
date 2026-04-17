@@ -7,6 +7,7 @@ import AvatarCircle from "./avatara";
 import { useAppContextData } from "@/context/appcontext";
 import { User, Chats } from "@/lib/types";
 import { useMemo } from "react";
+import { useSocket } from "@/context/socketcontext";
 
 interface ChatSidebarProps {
   activeFriendId: string | null;
@@ -16,10 +17,7 @@ interface ChatSidebarProps {
 const ChatSidebar = ({ activeFriendId, onSelectFriend }: ChatSidebarProps) => {
   const [searchQuery, setSearchQuery] = useState("");
   const { users, user: loggedInUser, chats, logoutUser } = useAppContextData();
-  console.log(chats)
-  console.log(chats)
-  console.log(chats)
-  console.log(chats)
+  const { onlineUsers } = useSocket();
 
   const filteredFriends: User[] = useMemo(() => {
     if (!users || !loggedInUser) return [];
@@ -29,11 +27,6 @@ const ChatSidebar = ({ activeFriendId, onSelectFriend }: ChatSidebarProps) => {
         u.name.toLowerCase().includes(searchQuery.toLowerCase()),
     );
   }, [users, searchQuery, loggedInUser]);
-
-  console.log("users:", users);
-  console.log("searchQuery:", searchQuery);
-  console.log(filteredFriends);
-  console.log(loggedInUser);
 
   return (
     <div className="w-full md:w-[340px] bg-card flex flex-col h-full border-r border-border">
@@ -45,7 +38,7 @@ const ChatSidebar = ({ activeFriendId, onSelectFriend }: ChatSidebarProps) => {
             <div>
               <h2 className="font-semibold text-sm">My Chats</h2>
               <p className="text-xs text-muted-foreground">
-                {filteredFriends?.length || 0} friends online
+                {onlineUsers.length} online
               </p>
             </div>
           </div>
@@ -76,11 +69,13 @@ const ChatSidebar = ({ activeFriendId, onSelectFriend }: ChatSidebarProps) => {
       </div>
 
       {/* Friend List */}
+      {/* Friend List */}
       <div className="flex-1 overflow-y-auto px-3 py-3 chat-scroll space-y-0.5">
         {filteredFriends?.map((friend) => {
           const friendChat: Chats | undefined = Array.isArray(chats)
             ? chats.find((c) => c.user._id === friend._id)
             : undefined;
+
           return (
             <FriendListItem
               key={friend._id}
@@ -91,6 +86,7 @@ const ChatSidebar = ({ activeFriendId, onSelectFriend }: ChatSidebarProps) => {
             />
           );
         })}
+
         {filteredFriends?.length === 0 && (
           <div className="text-center py-12">
             <p className="text-sm text-muted-foreground">No matches found</p>

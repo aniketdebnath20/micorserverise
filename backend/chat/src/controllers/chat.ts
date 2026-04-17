@@ -58,7 +58,7 @@ export const getAllchat = asyncHandler(
     const chats = await Chat.find({ users: userId })
       .sort({ updatedAt: -1 })
       .populate({
-        path: "latestMessage.text", // ✅ IMPORTANT
+        path: "latestMessage.text",
         select: "text sender createdAt",
       })
       .lean();
@@ -75,7 +75,6 @@ export const getAllchat = asyncHandler(
           seen: false,
         });
 
-        /* USER FETCH */
         let userData;
         try {
           const { data } = await axios.get(
@@ -94,8 +93,6 @@ export const getAllchat = asyncHandler(
             createdAt: chat.createdAt,
             updatedAt: chat.updatedAt,
             unseenCount,
-
-            // ✅ FINAL FIX (NO findById anymore)
             latestMessage: chat.latestMessage?.text
               ? {
                   _id: chat.latestMessage.text._id,
@@ -144,19 +141,14 @@ export const sendMessage = asyncHandler(
       return res.status(403).json({ message: "Access denied" });
     }
 
-    /* ===============================
-       FIND RECEIVER + ROOM CHECK
-    =============================== */
-
     const receiverId = chat.users.find(
       (id: any) => id.toString() !== senderId.toString(),
     );
 
     let isReceiverInChatRoom = false;
-    let receiverSocketId: string | undefined;
 
     if (receiverId) {
-      receiverSocketId = getRecieverSocketId(receiverId.toString());
+      const receiverSocketId = getRecieverSocketId(receiverId.toString());
 
       if (receiverSocketId) {
         const receiverSocket = io.sockets.sockets.get(receiverSocketId);
@@ -166,10 +158,6 @@ export const sendMessage = asyncHandler(
         }
       }
     }
-
-    /* ===============================
-       CREATE MESSAGE
-    =============================== */
 
     const messageData: any = {
       chatId,
@@ -189,10 +177,6 @@ export const sendMessage = asyncHandler(
 
     const savedMessage = await Message.create(messageData);
 
-    /* ===============================
-       UPDATE CHAT
-    =============================== */
-
     await Chat.findByIdAndUpdate(chatId, {
       latestMessage: {
         text: savedMessage._id,
@@ -201,35 +185,7 @@ export const sendMessage = asyncHandler(
       updatedAt: new Date(),
     });
 
-    /* ===============================
-       SOCKET EMITS
-    =============================== */
-
-    // emit to room
-    io.to(chatId).emit("newMessage", savedMessage);
-
-    // emit to receiver directly
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", savedMessage);
-    }
-
-    // emit to sender
-    const senderSocketId = getRecieverSocketId(senderId.toString());
-
-    if (senderSocketId) {
-      io.to(senderSocketId).emit("newMessage", savedMessage);
-    }
-
-    // message seen emit
-    if (isReceiverInChatRoom && senderSocketId) {
-      io.to(senderSocketId).emit("messageSeen", {
-        chatId: chatId,
-        seenBy: receiverId,
-        messageIds: [savedMessage._id],
-      });
-    }
-
-    /* =============================== */
+    io.to(chatId).emit("newMessage", savedMessage.toObject());
 
     res.status(201).json({
       message: "Message sent",
@@ -262,25 +218,16 @@ export const getMessagesByChat = asyncHandler(
       return res.status(403).json({ message: "Access denied" });
     }
 
-    /* ===============================
-       GET MESSAGES
-    =============================== */
     const messages = await Message.find({ chatId })
       .sort({ createdAt: 1 })
       .lean();
 
-    /* ===============================
-       FIND UNSEEN
-    =============================== */
     const messageToMarkSeen = await Message.find({
-      chatId: chatId,
+      chatId,
       sender: { $ne: userId },
       seen: false,
     });
 
-    /* ===============================
-       MARK SEEN
-    =============================== */
     await Message.updateMany(
       {
         chatId,
@@ -295,9 +242,6 @@ export const getMessagesByChat = asyncHandler(
       },
     );
 
-    /* ===============================
-       FIND OTHER USER
-    =============================== */
     const otherUserId = chat.users.find(
       (id) => id.toString() !== userId.toString(),
     );
@@ -312,24 +256,17 @@ export const getMessagesByChat = asyncHandler(
       userData = { _id: otherUserId, name: "Unknown User" };
     }
 
-    /* ===============================
-       EMIT SEEN
-    =============================== */
     if (otherUserId && messageToMarkSeen.length > 0) {
-      const otherUserSocketId = getRecieverSocketId(
-        otherUserId.toString()
-      );
+      const otherUserSocketId = getRecieverSocketId(otherUserId.toString());
 
       if (otherUserSocketId) {
         io.to(otherUserSocketId).emit("messageSeen", {
-          chatId: chatId,
+          chatId,
           seenBy: userId,
           messageIds: messageToMarkSeen.map((msg) => msg._id),
         });
       }
     }
-
-    /* =============================== */
 
     res.status(200).json({
       messages,
